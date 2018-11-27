@@ -35,6 +35,9 @@ import sys
 import math
 import pickle
 from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier as RFC
+
+
 from pdb import set_trace as bp
 
 def main(args):
@@ -93,7 +96,8 @@ def main(args):
             if (args.mode=='TRAIN'):
                 # Train classifier
                 print('Training classifier')
-                model = SVC(kernel='linear', probability=True)
+                #model = SVC(kernel='linear', probability=True)
+                model = RFC(n_jobs=8, n_estimators=100)
                 #bp()
                 model.fit(emb_array, labels)
             
@@ -101,8 +105,36 @@ def main(args):
                 class_names = [ cls.name.replace('_', ' ') for cls in dataset]
 
                 # Saving classifier model
+                #bp()
+
+                mean_emb_array= [] #np.zeros((len(labels), embedding_size))
+
+                
+                
+                prev = 0
+                curr = 1
+                idx = 0
+                while curr < len(labels):
+                    if labels[prev] != labels[curr]:
+                       
+                        #mean_emb_array[idx] = np.mean(emb_array[prev:curr], axis=0)
+                        mean_emb_array.append(np.mean(emb_array[prev:curr], axis=0))
+                        idx += 1
+                        prev = curr
+                    else:
+                        pass
+                    curr += 1
+                    
+                #mean_emb_array[idx] = np.mean(emb_array[prev:curr], axis=0)
+                mean_emb_array.append(np.mean(emb_array[prev:curr], axis=0))
+                idx += 1
+                #bp()
+
+                mean_emb_array = np.array(mean_emb_array)
+                #pbp()
+                print("subsuet_train_emb_array: {}".format(mean_emb_array.shape))
                 with open(classifier_filename_exp, 'wb') as outfile:
-                    pickle.dump((model, class_names), outfile)
+                    pickle.dump((model, class_names, mean_emb_array), outfile)
                 print('Saved classifier model to file "%s"' % classifier_filename_exp)
                 
             elif (args.mode=='CLASSIFY'):

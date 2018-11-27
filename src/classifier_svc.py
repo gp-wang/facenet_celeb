@@ -35,6 +35,9 @@ import sys
 import math
 import pickle
 from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier as RFC
+
+
 from pdb import set_trace as bp
 
 def main(args):
@@ -94,6 +97,7 @@ def main(args):
                 # Train classifier
                 print('Training classifier')
                 model = SVC(kernel='linear', probability=True)
+                #model = RFC(n_jobs=8, n_estimators=100)
                 #bp()
                 model.fit(emb_array, labels)
             
@@ -102,7 +106,7 @@ def main(args):
 
                 # Saving classifier model
                 with open(classifier_filename_exp, 'wb') as outfile:
-                    pickle.dump((model, class_names), outfile)
+                    pickle.dump((model, class_names, emb_array), outfile)
                 print('Saved classifier model to file "%s"' % classifier_filename_exp)
                 
             elif (args.mode=='CLASSIFY'):

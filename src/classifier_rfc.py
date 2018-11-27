@@ -35,6 +35,9 @@ import sys
 import math
 import pickle
 from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier as RFC
+
+
 from pdb import set_trace as bp
 
 def main(args):
@@ -93,7 +96,8 @@ def main(args):
             if (args.mode=='TRAIN'):
                 # Train classifier
                 print('Training classifier')
-                model = SVC(kernel='linear', probability=True)
+                #model = SVC(kernel='linear', probability=True)
+                model = RFC(n_jobs=8, n_estimators=100)
                 #bp()
                 model.fit(emb_array, labels)
             

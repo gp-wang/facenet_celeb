@@ -1,0 +1,10 @@
+1115, error:
+
+_emb.pkl"
+Traceback (most recent call last):
+  File "src/classifier_multi_2nd_cmpr_classify.py", line 255, in <module>
+      main(parse_arguments(sys.argv[1:]))
+        File "src/classifier_multi_2nd_cmpr_classify.py", line 171, in main
+            top_class_emb_array = ind_b_from_a(train_emb_array, top_N_class_label_indices)
+            ValueError: operands could not be broadcast together with shapes (181650,512) (15075,24)_emb.pkl"
+

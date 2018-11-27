@@ -35,6 +35,9 @@ import sys
 import math
 import pickle
 from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier as RFC
+
+
 from pdb import set_trace as bp
 
 def main(args):
@@ -94,6 +97,7 @@ def main(args):
                 # Train classifier
                 print('Training classifier')
                 model = SVC(kernel='linear', probability=True)
+                #model = RFC(n_jobs=8, n_estimators=100)
                 #bp()
                 model.fit(emb_array, labels)
             
@@ -101,8 +105,36 @@ def main(args):
                 class_names = [ cls.name.replace('_', ' ') for cls in dataset]
 
                 # Saving classifier model
+                #bp()
+
+                mean_emb_array= [] #np.zeros((len(labels), embedding_size))
+
+                
+                
+                prev = 0
+                curr = 1
+                idx = 0
+                while curr < len(labels):
+                    if labels[prev] != labels[curr]:
+                       
+                        #mean_emb_array[idx] = np.mean(emb_array[prev:curr], axis=0)
+                        mean_emb_array.append(np.mean(emb_array[prev:curr], axis=0))
+                        idx += 1
+                        prev = curr
+                    else:
+                        pass
+                    curr += 1
+                    
+                #mean_emb_array[idx] = np.mean(emb_array[prev:curr], axis=0)
+                mean_emb_array.append(np.mean(emb_array[prev:curr], axis=0))
+                idx += 1
+                #bp()
+
+                mean_emb_array = np.array(mean_emb_array)
+                #pbp()
+                print("subsuet_train_emb_array: {}".format(mean_emb_array.shape))
                 with open(classifier_filename_exp, 'wb') as outfile:
-                    pickle.dump((model, class_names), outfile)
+                    pickle.dump((model, class_names, mean_emb_array), outfile)
                 print('Saved classifier model to file "%s"' % classifier_filename_exp)
                 
             elif (args.mode=='CLASSIFY'):
@@ -150,9 +182,6 @@ def parse_arguments(argv):
     parser.add_argument('classifier_filename', 
         help='Classifier model file name as a pickle (.pkl) file. ' + 
         'For training this is the output and for classification this is an input.')
-    parser.add_argument('--use_split_dataset', 
-        help='Indicates that the dataset specified by data_dir should be split into a training and test set. ' +  
-        'Otherwise a separate test set can be specified using the test_data_dir option.', action='store_true')
     parser.add_argument('--test_data_dir', type=str,
         help='Path to the test data directory containing aligned images used for testing.')
     parser.add_argument('--batch_size', type=int,
@@ -165,6 +194,8 @@ def parse_arguments(argv):
         help='Only include classes with at least this number of images in the dataset', default=20)
     parser.add_argument('--nrof_train_images_per_class', type=int,
         help='Use this number of images from each class for training and the rest for testing', default=10)
+    parser.add_argument('--nrof_subsets', type=int,
+                        help='Use this number of subsets for training svcs', default=1)
     
     return parser.parse_args(argv)
 
