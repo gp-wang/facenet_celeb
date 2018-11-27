@@ -40,33 +40,24 @@ import time
 import multiprocessing
 from pdb import set_trace as bp
 import functools
-def do_work( emb_array, predictions, classifier_filename_exp):
+def do_work( emb_array, result_dict_predictions, result_dict_class_names, classifier_filename_exp):
                         # gw: todo, find a way to append matrices to the right of existing ones, 
 
     # Classify images
 
     with open(classifier_filename_exp, 'rb') as infile:
-        (model, class_names) = pickle.load(infile)
+        (model, subset_class_names) = pickle.load(infile)
 
     print('Loaded classifier model from file "%s"' % classifier_filename_exp)
 
     begin = time.perf_counter()
-    subset_prediction = model.predict_proba(emb_array)
+    subset_predictions = model.predict_proba(emb_array)
     end = time.perf_counter()
 
     print('classified subset {} images in {} seconds'.format(len(emb_array), end-begin))
-    if predictions is None:
 
-        predictions = subset_prediction
-
-        combined_class_names = class_names[:]
-        #bp()
-
-
-
-    else:
-        predictions = np.concatenate((predictions, subset_prediction), axis=1)
-        combined_class_names = np.concatenate((combined_class_names, class_names[:]), axis=0)
+    result_dict_predictions[classifier_filename_exp] = subset_predictions
+    result_dict_class_names[classifier_filename_exp] = subset_class_names[:]
 
 
 def str_eq(a,b):
@@ -79,7 +70,7 @@ arr_eq = np.frompyfunc(str_eq, 2,1)
 
 # arr_get_arr_val = np.frompyfunc(get_arr_val, 2, 1)
 
-def main(args, pool):
+def main(args):
   
     with tf.Graph().as_default():
       
@@ -155,36 +146,37 @@ def main(args, pool):
                 print('Testing classifier')
                 predictions = None
                 combined_class_names = None
-                # for classifier_filename_exp in  classifier_filename_exp_list:
-                #     # gw: todo, find a way to append matrices to the right of existing ones, 
+                mgr = multiprocessing.Manager()
+                result_dict_predictions = mgr.dict()
+                result_dict_class_names = mgr.dict()
+
+                
+                prepared_worker_func = functools.partial(do_work, emb_array, result_dict_predictions, result_dict_class_names)
+
+                pool_size = multiprocessing.cpu_count() *2
+                print("proc size is {}".format(pool_size))
+
+                pool = multiprocessing.Pool(processes=pool_size)
+
+
+                pool.map(prepared_worker_func, classifier_filename_exp_list)
+                pool.close()
+                pool.join()
+
+                bp()
+                for classifier_filename_exp in classifier_filename_exp_list:
+                    subset_prediction = result_dict_predictions[classifier_filename_exp]
+                    subset_class_names = result_dict_class_names[classifier_filename_exp]
                     
-                #     # Classify images
-                    
-                #     with open(classifier_filename_exp, 'rb') as infile:
-                #         (model, class_names) = pickle.load(infile)
+                    if predictions is None:
+                        predictions = subset_prediction
+                        combined_class_names = subset_class_names[:]
+                        #bp()
 
-                #     print('Loaded classifier model from file "%s"' % classifier_filename_exp)
+                    else:
+                        predictions = np.concatenate((predictions, subset_prediction), axis=1)
+                        combined_class_names = np.concatenate((combined_class_names, subset_class_names[:]), axis=0)
 
-                #     begin = time.perf_counter()
-                #     subset_prediction = model.predict_proba(emb_array)
-                #     end = time.perf_counter()
-
-                #     print('classified subset {} images in {} seconds'.format(len(emb_array), end-begin))
-                #     if predictions is None:
-
-                #         predictions = subset_prediction
- 
-                #         combined_class_names = class_names[:]
-                #         bp()
-
- 
- 
-                #     else:
-                #         predictions = np.concatenate((predictions, subset_prediction), axis=1)
-                #         combined_class_names = np.concatenate((combined_class_names, class_names[:]), axis=0)
-                prepared_worker_func = functools.partial(do_work, emb_array, predictions)
-
-                pool.map(prepared_worker_func, classifier_filename_exp_list[:4])
                 bp()
                     
                 best_class_indices = np.argmax(predictions, axis=1)
@@ -251,9 +243,5 @@ def parse_arguments(argv):
 
 if __name__ == '__main__':
 
-    pool_size = multiprocessing.cpu_count() *2
-    print("proc size is {}".format(pool_size))
-
-    pool = multiprocessing.Pool(processes=pool_size)
     
-    main(parse_arguments(sys.argv[1:]), pool)
+    main(parse_arguments(sys.argv[1:]))
