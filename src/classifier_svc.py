@@ -102,7 +102,9 @@ def main(args):
                 model.fit(emb_array, labels)
             
                 # Create a list of class names
-                class_names = [ cls.name.replace('_', ' ') for cls in dataset]
+                # class_names = [ cls.name.replace('_', ' ') for cls in dataset]
+                # gw: use raw class names
+                class_names = [ cls.name for cls in dataset]
 
                 # Saving classifier model
                 with open(classifier_filename_exp, 'wb') as outfile:
