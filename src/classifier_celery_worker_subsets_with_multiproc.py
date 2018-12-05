@@ -82,6 +82,7 @@ arr_eq = np.frompyfunc(str_eq, 2,1)
 
 
 
+tf_sess = None
 def classifier_init(args):
 
     # init
@@ -124,123 +125,127 @@ def classifier_init(args):
     # result_dict_predictions = mgr.dict()
     # result_dict_class_names = mgr.dict()
 
-        with tf.Session() as sess:
+        #with tf.Session() as sess: # use global session instead, put init in worker_init
+        # https://stackoverflow.com/questions/41734275/no-response-from-celery-worker-with-tensorflow
+        global tf_sess
 
-            np.random.seed(seed=args['seed'])
+        sess = tf_sess
 
-            # input loop for classification
+        np.random.seed(seed=args['seed'])
 
-                # e.g.: /home/gaopeng/workspace/ms1m-aligned-full/gw_celeb_3500_20_val/
-            # data_dir = input("Input a data dir for classification: ")
-            data_dir = dirname
-            print("data dir for classification is {}".format(data_dir))
-            dataset = facenet.get_dataset(data_dir)
+        # input loop for classification
 
-            # Check that there are at least one training image per class
-            for cls in dataset:
-                assert(len(cls.image_paths)>0, 'There must be at least one image for each class in the dataset')            
+            # e.g.: /home/gaopeng/workspace/ms1m-aligned-full/gw_celeb_3500_20_val/
+        # data_dir = input("Input a data dir for classification: ")
+        data_dir = dirname
+        print("data dir for classification is {}".format(data_dir))
+        dataset = facenet.get_dataset(data_dir)
 
-
-            paths, label_numbers, label_names = facenet.get_image_paths_and_labelnames(dataset)
-
-            # label_names = [ name.replace('_', ' ') for name in label_names]
-
-
-            print('Number of classes: %d' % len(dataset))
-            print('Number of images: %d' % len(paths))
-
-            # Load the subset_model
-            print('Loading feature extraction subset_model')
-            facenet.load_model(args['model'])
-
-            # Get input and output tensors
-            images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
-            embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
-            phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
-            embedding_size = embeddings.get_shape()[1]
-
-            # Run forward pass to calculate embeddings
-            print('Calculating features for images')
-            nrof_images = len(paths)
-            nrof_batches_per_epoch = int(math.ceil(1.0*nrof_images / args['batch_size']))
-            emb_array = np.zeros((nrof_images, embedding_size))
-            for i in range(nrof_batches_per_epoch):
-                start_index = i*args['batch_size']
-                end_index = min((i+1)*args['batch_size'], nrof_images)
-                paths_batch = paths[start_index:end_index]
-                images = facenet.load_data(paths_batch, False, False, args['image_size'])
-                feed_dict = { images_placeholder:images, phase_train_placeholder:False }
-                emb_array[start_index:end_index,:] = sess.run(embeddings, feed_dict=feed_dict)
-
-            #------------- classifiying
-            print('Testing classifier')
+        # Check that there are at least one training image per class
+        for cls in dataset:
+            assert(len(cls.image_paths)>0, 'There must be at least one image for each class in the dataset')            
 
 
+        paths, label_numbers, label_names = facenet.get_image_paths_and_labelnames(dataset)
+
+        # label_names = [ name.replace('_', ' ') for name in label_names]
 
 
-            # done: extracted out one-time expensive task out as initialization (model loading)
-            # todo: how to make it a long running process?
-            jobs = [multiprocessing.Process(target=do_work, args=(emb_array, result_dict_predictions, result_dict_class_names, classifier_filename_exp_list[i], subset_model_and_class_names_list[i])) for i in range(8)]
+        print('Number of classes: %d' % len(dataset))
+        print('Number of images: %d' % len(paths))
 
-            for job in jobs:
-                job.start()
+        # Load the subset_model
+        print('Loading feature extraction subset_model')
+        facenet.load_model(args['model'])
 
-            for job in jobs:
-                job.join()
+        # Get input and output tensors
+        images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
+        embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
+        phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
+        embedding_size = embeddings.get_shape()[1]
 
-            #bp()
-            for classifier_filename_exp in classifier_filename_exp_list:
-                subset_prediction = result_dict_predictions[classifier_filename_exp]
-                subset_class_names = result_dict_class_names[classifier_filename_exp]
+        # Run forward pass to calculate embeddings
+        print('Calculating features for images')
+        nrof_images = len(paths)
+        nrof_batches_per_epoch = int(math.ceil(1.0*nrof_images / args['batch_size']))
+        emb_array = np.zeros((nrof_images, embedding_size))
+        for i in range(nrof_batches_per_epoch):
+            start_index = i*args['batch_size']
+            end_index = min((i+1)*args['batch_size'], nrof_images)
+            paths_batch = paths[start_index:end_index]
+            images = facenet.load_data(paths_batch, False, False, args['image_size'])
+            feed_dict = { images_placeholder:images, phase_train_placeholder:False }
+            emb_array[start_index:end_index,:] = sess.run(embeddings, feed_dict=feed_dict)
 
-                if predictions is None:
-                    predictions = subset_prediction
-                    combined_class_names = subset_class_names[:]
-                    #bp()
+        #------------- classifiying
+        print('Testing classifier')
 
-                else:
-                    predictions = np.concatenate((predictions, subset_prediction), axis=1)
-                    combined_class_names = np.concatenate((combined_class_names, subset_class_names[:]), axis=0)
 
-            # bp()
 
-            best_class_indices = np.argmax(predictions, axis=1)
-            best_class_names = np.array([combined_class_names[idx] for idx in best_class_indices])
-            #best_class_names = np.arang;  # gw: todo: use ix_ to make a ndarray with row being test_indices, and col (only 1) being the best class name
-            # best_class_indices = np.argsort(predictions, axis=1)[-8:] #gw: todo, calcuate embedding distance again amont 8 rfc results
-            best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
 
-            def show_human_name_or_raw_class_name(msid):
-                if msid in msid_to_name_dict:
-                    for name in msid_to_name_dict[msid]:
-                        if "@en" in name:
-                            return name
-                        elif "@zh" in name:
-                            return name
-                        elif "@zh-Hant" in name:
-                            return name
+        # done: extracted out one-time expensive task out as initialization (model loading)
+        # todo: how to make it a long running process?
+        jobs = [multiprocessing.Process(target=do_work, args=(emb_array, result_dict_predictions, result_dict_class_names, classifier_filename_exp_list[i], subset_model_and_class_names_list[i])) for i in range(8)]
 
-                return msid
+        for job in jobs:
+            job.start()
 
-            result_str = ''
-            for i in range(len(best_class_indices)):
-                line = 'actual name (msid): {} ({}),\t, pred name (msid): {} ({}), \t prob:  {:.3f}, \t img: {}'.format (show_human_name_or_raw_class_name(label_names[i]),
-                                                                                               label_names[i],
-                                                                                           show_human_name_or_raw_class_name(combined_class_names[best_class_indices[i]]),
-                                                                                                                 combined_class_names[best_class_indices[i]],
-                                                                                           best_class_probabilities[i],
-                                                                                           paths[i])
-                result_str += (line + '\n')
-                print(line)
+        for job in jobs:
+            job.join()
 
-            # accuracy = np.mean(np.equal(best_class_indices, label_numbers))
-            # accuracy = np.mean(np.equal(best_class_indices, label_names))
-            # bp()
-            accuracy = np.mean(arr_eq(best_class_names, label_names))
-            accuracy_str = 'Accuracy: {:.13f}'.format(accuracy)
-            print(accuracy_str)
-            result_str += (accuracy_str + '\n')
-            return result_str
+        #bp()
+        for classifier_filename_exp in classifier_filename_exp_list:
+            subset_prediction = result_dict_predictions[classifier_filename_exp]
+            subset_class_names = result_dict_class_names[classifier_filename_exp]
+
+            if predictions is None:
+                predictions = subset_prediction
+                combined_class_names = subset_class_names[:]
+                #bp()
+
+            else:
+                predictions = np.concatenate((predictions, subset_prediction), axis=1)
+                combined_class_names = np.concatenate((combined_class_names, subset_class_names[:]), axis=0)
+
+        # bp()
+
+        best_class_indices = np.argmax(predictions, axis=1)
+        best_class_names = np.array([combined_class_names[idx] for idx in best_class_indices])
+        #best_class_names = np.arang;  # gw: todo: use ix_ to make a ndarray with row being test_indices, and col (only 1) being the best class name
+        # best_class_indices = np.argsort(predictions, axis=1)[-8:] #gw: todo, calcuate embedding distance again amont 8 rfc results
+        best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
+
+        def show_human_name_or_raw_class_name(msid):
+            if msid in msid_to_name_dict:
+                for name in msid_to_name_dict[msid]:
+                    if "@en" in name:
+                        return name
+                    elif "@zh" in name:
+                        return name
+                    elif "@zh-Hant" in name:
+                        return name
+
+            return msid
+
+        result_str = ''
+        for i in range(len(best_class_indices)):
+            line = 'actual name (msid): {} ({}),\t, pred name (msid): {} ({}), \t prob:  {:.3f}, \t img: {}'.format (show_human_name_or_raw_class_name(label_names[i]),
+                                                                                           label_names[i],
+                                                                                       show_human_name_or_raw_class_name(combined_class_names[best_class_indices[i]]),
+                                                                                                             combined_class_names[best_class_indices[i]],
+                                                                                       best_class_probabilities[i],
+                                                                                       paths[i])
+            result_str += (line + '\n')
+            print(line)
+
+        # accuracy = np.mean(np.equal(best_class_indices, label_numbers))
+        # accuracy = np.mean(np.equal(best_class_indices, label_names))
+        # bp()
+        accuracy = np.mean(arr_eq(best_class_names, label_names))
+        accuracy_str = 'Accuracy: {:.13f}'.format(accuracy)
+        print(accuracy_str)
+        result_str += (accuracy_str + '\n')
+        return result_str
 
     return classify_fn
 
@@ -299,6 +304,9 @@ def task_init(**kwargs):
     global classify_delegate
     def classify_delegate(dname):
         return classify_fn(dname)
+
+    global tf_sess
+    tf_sess = tf.Session()
 
     
 
