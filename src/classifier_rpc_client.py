@@ -29,7 +29,7 @@ class FibonacciRpcClient(object):
                                    body=str(n))
         while self.response is None:
             self.connection.process_data_events()
-        return int(self.response)
+        return self.response.decode('utf-8')
 
 fibonacci_rpc = FibonacciRpcClient()
 

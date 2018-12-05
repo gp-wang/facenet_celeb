@@ -116,20 +116,21 @@ def classifier_init(args):
 
     # graph = tf.Graph() # gw not working, likely need to enter the context. Anyway, we can use default graph implicitly: https://stackoverflow.com/questions/39614938/why-do-we-need-tensorflow-tf-graph
     # not good practice but reduce our complexity for now
-    def classify_fn(dirname):
-        # nonlocal graph
-        
-        nonlocal predictions
-        nonlocal combined_class_names
+    with tf.Session() as sess:
+        def classify_fn(dirname):
+            # nonlocal graph
+
+            nonlocal predictions
+            nonlocal combined_class_names
 
 
-    # predictions = None
-    # combined_class_names = None
-    # mgr = multiprocessing.Manager()
-    # result_dict_predictions = mgr.dict()
-    # result_dict_class_names = mgr.dict()
+            # predictions = None
+            # combined_class_names = None
+            # mgr = multiprocessing.Manager()
+            # result_dict_predictions = mgr.dict()
+            # result_dict_class_names = mgr.dict()
 
-        with tf.Session() as sess:
+
 
             np.random.seed(seed=args['seed'])
 
