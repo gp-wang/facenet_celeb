@@ -41,7 +41,6 @@ import multiprocessing
 from pdb import set_trace as bp
 import functools
 
-
 def ms1m_name_list_reader(fname):
     assert os.path.isfile(fname), "{} doesn't exist".format(fname)
 
@@ -81,11 +80,13 @@ arr_eq = np.frompyfunc(str_eq, 2,1)
 
 # arr_get_arr_val = np.frompyfunc(get_arr_val, 2, 1)
 
-def init(args):
+
+
+def classifier_init(args):
 
     # init
     # load subset classifiers
-    classifier_filename_exp_list = [os.path.expanduser(fname) for fname in args.classifier_filename]
+    classifier_filename_exp_list = [os.path.expanduser(fname) for fname in args['classifier_filename']]
     subset_model_and_class_names_list = []
     for classifier_filename_exp in classifier_filename_exp_list:
         start = time.perf_counter()
@@ -108,18 +109,30 @@ def init(args):
     # gw: bookmark 1129 afternoon
     # ----done init----
 
-#def work():  
-    with tf.Graph().as_default():
-      
-        with tf.Session() as sess:
-            
-            np.random.seed(seed=args.seed)
+    def classify_fn(dirname):
+        nonlocal predictions
+        nonlocal combined_class_names
 
-            # input loop for classification
-            while True:
 
-                # e.g.: /home/gaopeng/workspace/ms1m-aligned-full/gw_celeb_3500_20_val/
-                data_dir = input("Input a data dir for classification: ")
+    # predictions = None
+    # combined_class_names = None
+    # mgr = multiprocessing.Manager()
+    # result_dict_predictions = mgr.dict()
+    # result_dict_class_names = mgr.dict()
+        
+        
+        with tf.Graph().as_default():
+
+            with tf.Session() as sess:
+
+                np.random.seed(seed=args['seed'])
+
+                # input loop for classification
+                
+                    # e.g.: /home/gaopeng/workspace/ms1m-aligned-full/gw_celeb_3500_20_val/
+                # data_dir = input("Input a data dir for classification: ")
+                data_dir = dirname
+                print("data dir for classification is {}".format(data_dir))
                 dataset = facenet.get_dataset(data_dir)
 
                 # Check that there are at least one training image per class
@@ -128,16 +141,16 @@ def init(args):
 
 
                 paths, label_numbers, label_names = facenet.get_image_paths_and_labelnames(dataset)
-                
+
                 # label_names = [ name.replace('_', ' ') for name in label_names]
-                
+
 
                 print('Number of classes: %d' % len(dataset))
                 print('Number of images: %d' % len(paths))
 
                 # Load the subset_model
                 print('Loading feature extraction subset_model')
-                facenet.load_model(args.model)
+                facenet.load_model(args['model'])
 
                 # Get input and output tensors
                 images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
@@ -148,13 +161,13 @@ def init(args):
                 # Run forward pass to calculate embeddings
                 print('Calculating features for images')
                 nrof_images = len(paths)
-                nrof_batches_per_epoch = int(math.ceil(1.0*nrof_images / args.batch_size))
+                nrof_batches_per_epoch = int(math.ceil(1.0*nrof_images / args['batch_size']))
                 emb_array = np.zeros((nrof_images, embedding_size))
                 for i in range(nrof_batches_per_epoch):
-                    start_index = i*args.batch_size
-                    end_index = min((i+1)*args.batch_size, nrof_images)
+                    start_index = i*args['batch_size']
+                    end_index = min((i+1)*args['batch_size'], nrof_images)
                     paths_batch = paths[start_index:end_index]
-                    images = facenet.load_data(paths_batch, False, False, args.image_size)
+                    images = facenet.load_data(paths_batch, False, False, args['image_size'])
                     feed_dict = { images_placeholder:images, phase_train_placeholder:False }
                     emb_array[start_index:end_index,:] = sess.run(embeddings, feed_dict=feed_dict)
 
@@ -205,23 +218,30 @@ def init(args):
                                 return name
                             elif "@zh-Hant" in name:
                                 return name
-                        
+
                     return msid
-                
+
+                result_str = ''
                 for i in range(len(best_class_indices)):
-                    print('actual name (msid): %s (%s),\t, pred name (msid): %s (%s), \t prob:  %.3f, \t img: %s' % (show_human_name_or_raw_class_name(label_names[i]),
+                    line = 'actual name (msid): {} ({}),\t, pred name (msid): {} ({}), \t prob:  {:.3f}, \t img: {}'.format (show_human_name_or_raw_class_name(label_names[i]),
                                                                                                    label_names[i],
                                                                                                show_human_name_or_raw_class_name(combined_class_names[best_class_indices[i]]),
                                                                                                                      combined_class_names[best_class_indices[i]],
                                                                                                best_class_probabilities[i],
-                                                                                               paths[i]))
+                                                                                               paths[i])
+                    result_str += (line + '\n')
+                    print(line)
 
                 # accuracy = np.mean(np.equal(best_class_indices, label_numbers))
                 # accuracy = np.mean(np.equal(best_class_indices, label_names))
                 # bp()
                 accuracy = np.mean(arr_eq(best_class_names, label_names))
-                print('Accuracy: %.13f' % accuracy)
+                accuracy_str = 'Accuracy: {:.13f}'.format(accuracy)
+                print(accuracy_str)
+                result_str += (accuracy_str + '\n')
+                return result_str
 
+    return classify_fn
 
 def split_dataset(dataset, min_nrof_images_per_class, nrof_train_images_per_class):
     train_set = []
@@ -238,35 +258,63 @@ def split_dataset(dataset, min_nrof_images_per_class, nrof_train_images_per_clas
 # python src/classifier_multi.py --model /home/gaopeng/models/facenet/20180402-114759/20180402-114759.pb --classifier_filename ~/models/gw_subset_{1..9}_rfc_classifier.pkl --batch_size 1536 --min_nrof_images_per_class 20 --nrof_train_images_per_class 15 --use_split_dataset
 # def parse_arguments(argv):
 def parse_arguments():
-
-    parser = argparse.ArgumentParser()
+    args = {}
+    args['model'] = '/home/gaopeng/models/facenet/20180402-114759/20180402-114759.pb'
+    args['classifier_filename'] = ['~/models/gw_subset_{}_svc_classifier.pkl'.format(i) for i in range(1,9)]
+    args['batch_size'] = 1536
+    args['image_size'] = 160
+    args['seed'] = 666
+    args['min_nrof_images_per_class'] = 20
+    args['nrof_train_images_per_class'] = 15
     
-    parser.add_argument('--model', type=str, 
-                        help='Could be either a directory containing the meta_file and ckpt_file or a model protobuf (.pb) file',
-                        default='/home/gaopeng/models/facenet/20180402-114759/20180402-114759.pb'
-    )
-    parser.add_argument('--classifier_filename',
-                        nargs='*',
-        help='Classifier model file name as a pickle (.pkl) file. ' + 
-                        'For training this is the output and for classification this is an input.',
-                        default=['~/models/gw_subset_{}_svc_classifier.pkl'.format(i) for i in range(1,9)]
-)
-    parser.add_argument('--batch_size', type=int,
-                        help='Number of images to process in a batch.', default=1536)
-    parser.add_argument('--image_size', type=int,
-        help='Image size (height, width) in pixels.', default=160)
-    parser.add_argument('--seed', type=int,
-        help='Random seed.', default=666)
-    parser.add_argument('--min_nrof_images_per_class', type=int,
-        help='Only include classes with at least this number of images in the dataset', default=20)
-    parser.add_argument('--nrof_train_images_per_class', type=int,
-                        help='Use this number of images from each class for training and the rest for testing', default=15)
-    
-    return parser.parse_args()
 
-if __name__ == '__main__':
+    return args
+
+
+
+
+
+
+# ----
+from celery import Celery
+from celery.signals import worker_init
+
+classify_delegate=None
+
+app = Celery('tasks', broker='pyamqp://guest@localhost//')
+
+@worker_init.connect
+def task_init(**kwargs):
+    
+    # seting daemon to false, otherwise cant use multiprocessing
+    # https://github.com/celery/celery/issues/1709#issuecomment-324802431
+    print("init config, before: {}".format(multiprocessing.current_process()._config))
+    multiprocessing.current_process()._config['daemon'] = False
+    print("init config, after: {}".format(multiprocessing.current_process()._config))
+    
+    #bp()
+    tmp_args = parse_arguments()
+    classify_fn = classifier_init(tmp_args)  # now the global val classify_delegate holds the actual classifying function using tensorflow
+    global classify_delegate
+    def classify_delegate(dname):
+        return classify_fn(dname)
 
     
-    init(parse_arguments())
+
+
+@app.task
+def classify_directory(dname):
+    print("task config, before: {}".format(multiprocessing.current_process()._config))
+    multiprocessing.current_process()._config['daemon'] = False
+    print("task config, after: {}".format(multiprocessing.current_process()._config))
+
+    
+    global classify_delegate
+    return classify_delegate(dname)
+
+# gw: moved to celery worker_init
+# if __name__ == '__main__':
+#    init(parse_arguments())
     # sample invocation:
     # (venv_facenet) gaopeng@gw-cm6870:~/workspace/python3.6/facenet$ python src/classifier_daemon_subsets_with_multiproc.py --model /home/gaopeng/models/facenet/20180402-114759/20180402-114759.pb --classifier_filename ~/models/gw_subset_{1..8}_svc_classifier.pkl --batch_size 1536 --min_nrof_images_per_class 20 --nrof_train_images_per_class 15 
+
