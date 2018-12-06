@@ -33,6 +33,7 @@ class FibonacciRpcClient(object):
 
 fibonacci_rpc = FibonacciRpcClient()
 
-print(" [x] Requesting classifying /home/gaopeng/datasets/gw_field_test_3_182")
-response = fibonacci_rpc.call('/home/gaopeng/datasets/gw_field_test_3_182')
+dirname = '/tmp/flask_rpc_tf_worker_43ngio34'
+print(" [x] Requesting classifying {}".format(dirname))
+response = fibonacci_rpc.call(dirname)
 print(" [.] Got %r" % response)
