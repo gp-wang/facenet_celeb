@@ -97,8 +97,8 @@ def classifier_init(args):
         
         print('Loaded classifier subset_model from file {} in {} seconds'.format(classifier_filename_exp, end - start))
 
-    #predictions = None
-    #combined_class_names = None
+    predictions = None
+    combined_class_names = None
     mgr = multiprocessing.Manager()
     result_dict_predictions = mgr.dict()
     result_dict_class_names = mgr.dict()
@@ -120,13 +120,9 @@ def classifier_init(args):
         def classify_fn(dirname):
             # nonlocal graph
 
-            #nonlocal predictions
-            #nonlocal combined_class_names
+            nonlocal predictions
+            nonlocal combined_class_names
 
-            # need to be per call basis, not per init basis
-            predictions = None
-            combined_class_names = None
-            
 
             # predictions = None
             # combined_class_names = None
@@ -341,9 +337,13 @@ channel = connection.channel()
 
 channel.queue_declare(queue='rpc_queue')
 
-# gw: reduce prefetch count to fix "connection reset by peer" error
-# https://stackoverflow.com/questions/35438843/rabbitmq-error-timeout
-# channel.basic_qos(prefetch_count=10)
+def fib(n):
+    if n == 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fib(n-1) + fib(n-2)
 
 def on_request(ch, method, props, body):
     #n = int(body)
