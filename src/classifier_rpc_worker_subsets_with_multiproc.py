@@ -205,6 +205,10 @@ def classifier_init(args):
                 subset_prediction = result_dict_predictions[classifier_filename_exp]
                 subset_class_names = result_dict_class_names[classifier_filename_exp]
 
+                # gw: normalize within each subset, so that later when get Top N labels, we get the top one among each subset
+                # dont use it unless you have got a 2nd comparer, e.g. siamsenet
+                # subset_prediction = subset_prediction / np.expand_dims(subset_prediction.max(axis = 1), axis=1)
+                
                 if predictions is None:
                     predictions = subset_prediction
                     combined_class_names = subset_class_names[:]
