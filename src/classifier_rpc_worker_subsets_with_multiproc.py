@@ -40,6 +40,7 @@ import time
 import multiprocessing
 from pdb import set_trace as bp
 import functools
+import json
 
 def ms1m_name_list_reader(fname):
     assert os.path.isfile(fname), "{} doesn't exist".format(fname)
@@ -215,6 +216,43 @@ def classifier_init(args):
 
             # bp()
 
+
+            N = 8 * 3
+            top_N_class_label_indices = np.argsort(-predictions, axis=1)[:, :N]  # 8 * 3 per subset
+            # b_top3_per_row = b[
+            #             np.repeat(
+            #                             np.expand_dims(
+            #                                                 np.array([0,1,2]),
+            #                                                 axis=1
+            #                             ),
+            #                             3,
+            #                             axis = 1
+            #             )
+            #             , columns
+            # ]
+            #bp()
+            top_N_class_label_prob = predictions[
+                np.repeat(
+                    np.expand_dims(
+                        np.arange(top_N_class_label_indices.shape[0]),
+                        axis = 1
+                    )
+                    , N
+                    , axis = 1
+                )
+                , top_N_class_label_indices
+            ]
+            #bp()
+            top_N_class_label_names = np.chararray((top_N_class_label_indices.shape[0], top_N_class_label_indices.shape[1]))
+            for i in range(top_N_class_label_names.shape[0]):
+                for j in range(top_N_class_label_names.shape[1]):
+                    try:
+                        top_N_class_label_names[i][j] = combined_class_names[top_N_class_label_indices[i][j]]
+                    except:
+                        print("i: {}, j:{}, top_N_class_label_indices[i][j]: {}".format(i,j, top_N_class_label_indices[i][j]))
+                        raise
+            
+            #bp()
             best_class_indices = np.argmax(predictions, axis=1)
             best_class_names = np.array([combined_class_names[idx] for idx in best_class_indices])
             #best_class_names = np.arang;  # gw: todo: use ix_ to make a ndarray with row being test_indices, and col (only 1) being the best class name
@@ -234,15 +272,45 @@ def classifier_init(args):
                 return msid
 
             result_str = ''
+            #result = []
+            result = {} # gw: use dict foe easier indexing in client
             for i in range(len(best_class_indices)):
                 line = 'actual name (msid): {} ({}),\t, pred name (msid): {} ({}), \t prob:  {:.3f}, \t img: {}'.format (show_human_name_or_raw_class_name(label_names[i]),
                                                                                                label_names[i],
-                                                                                           show_human_name_or_raw_class_name(combined_class_names[best_class_indices[i]]),
+                                                                                                show_human_name_or_raw_class_name(combined_class_names[best_class_indices[i]]),
                                                                                                                  combined_class_names[best_class_indices[i]],
                                                                                            best_class_probabilities[i],
                                                                                            paths[i])
                 result_str += (line + '\n')
                 print(line)
+                try: 
+                    single_prediction_dict = {
+                        'screenId' : int(label_names[i]),
+                        'best': {
+                            'name': show_human_name_or_raw_class_name(combined_class_names[best_class_indices[i]]).split('@')[0].strip('"'),
+                            'prob': best_class_probabilities[i],
+                        },
+                        'topN': [
+                            {
+                                'name': show_human_name_or_raw_class_name(combined_class_names[top_N_class_label_indices[i][j]]).split('@')[0].strip('"'),
+                                'prob': top_N_class_label_prob[i][j],
+                            } for j in range(N)
+                        ]
+                    }
+                    result[single_prediction_dict['screenId']] = single_prediction_dict
+                except:
+                    single_prediction_dict = {
+                        'screenId': None,
+                        'name': None,
+                        'prob': None,
+                        'best': None,
+                        'topN': []
+                    }
+
+                # label_name will be person screen id: e.g. 1,2,3
+                #result.append({label_names[i]: single_prediction_dict})  # label_name[i] is folder name, also the key for uploading, e.g. "person-1": person-1.jpg
+                
+
 
             # accuracy = np.mean(np.equal(best_class_indices, label_numbers))
             # accuracy = np.mean(np.equal(best_class_indices, label_names))
@@ -251,7 +319,11 @@ def classifier_init(args):
             accuracy_str = 'Accuracy: {:.13f}'.format(accuracy)
             print(accuracy_str)
             result_str += (accuracy_str + '\n')
-            return result_str
+            #return result_str
+
+            #bp()
+
+            return json.dumps(result)
 
     return classify_fn
 

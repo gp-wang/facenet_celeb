@@ -143,9 +143,13 @@ def main(args):
                     print('Loaded classifier model from file "%s"' % classifier_filename_exp)
 
                     print("subsuet_train_emb_array: {}".format(subset_train_emb_array.shape))
+
+                    subset_predictions = model.predict_proba(emb_array)
+                    # gw: normalize within each subset, so that later when get Top N labels, we get the top one among each subset
+                    subset_predictions = subset_predictions / np.expand_dims(subset_predictions.max(axis = 1), axis=1)
                     if predictions is None:
 
-                        predictions = model.predict_proba(emb_array)
+                        predictions = subset_predictions
  
                         combined_class_names = class_names[:]
                         train_emb_array = subset_train_emb_array
@@ -155,7 +159,7 @@ def main(args):
                         
  
                     else:
-                        predictions = np.concatenate((predictions, model.predict_proba(emb_array)), axis=1)
+                        predictions = np.concatenate((predictions, subset_predictions), axis=1)
                         combined_class_names = np.concatenate((combined_class_names, class_names[:]), axis=0)
                         #bp()
                         train_emb_array = np.concatenate((train_emb_array, subset_train_emb_array), axis = 0)
@@ -163,7 +167,7 @@ def main(args):
 
                     i += 1
 
-
+
                 top_N_class_label_indices = np.argsort(-predictions, axis=1)[:, :N]  # 8 * 3 per subset
 
                 #map_to_train_emb_array = np.frompyfunc(lambda a,b : a[b], 2, 1)
@@ -230,6 +234,7 @@ def split_dataset(dataset, min_nrof_images_per_class, nrof_train_images_per_clas
     return train_set, test_set
 
 # python src/classifier_multi.py CLASSIFY --data_dir /home/gaopeng/workspace/ms1m-aligned-full/gw_celeb_3500_20_val/ --model /home/gaopeng/models/facenet/20180402-114759/20180402-114759.pb --classifier_filename ~/models/gw_subset_{1..9}_rfc_classifier.pkl --batch_size 1536 --min_nrof_images_per_class 20 --nrof_train_images_per_class 15 --use_split_dataset
+# python src/classifier_multi_2nd_cmpr_classify.py CLASSIFY --data_dir /home/gaopeng/workspace/ms1m-aligned-full/gw_celeb_3500_20_val/ --model /home/gaopeng/models/facenet/20180402-114759/20180402-114759.pb --classifier_filename ~/models/gw_subset_{1..8}_svc_classifier_with_emb.pkl --batch_size 1536 --min_nrof_images_per_class 20 --nrof_train_images_per_class 15 --use_split_dataset
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
     
