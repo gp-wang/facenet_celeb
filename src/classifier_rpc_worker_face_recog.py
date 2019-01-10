@@ -287,8 +287,23 @@ def predict(X_img_path, knn_clf=None, model_path=None, distance_threshold=0.6, y
 p    :param model_path: (optional) path to a pickled knn classifier. if not specified, model_save_path must be knn_clf.
     :param distance_threshold: (optional) distance threshold for face classification. the larger it is, the more chance
            of mis-classifying an unknown person as a known one.
+
+    ;param y: array to map index of class to its label string (gw: its shape should around 4k)
     :return: a list of names and face locations for the recognized faces in the image: [(name, bounding box), ...].
         For faces of unrecognized persons, the name 'unknown' will be returned.
+
+
+    gw: notes and learnings:
+    There are two concepts to distinguish:
+    1. population matrix: this consists of all training data points, in my case, it is 380k in size (380k face images belonging to 4k classes)
+    2. class label array: this consisits of all class labels, in my case, 4k classes
+
+    There are two methods to distinguish:
+    1. knn.closest_neighbors: the returned indices are population matrix
+    2. knn.predict_proba: the returned indices are class label array
+
+    Don't ever mix them up
+    
     """
     if not os.path.isfile(X_img_path) or os.path.splitext(X_img_path)[1][1:] not in ALLOWED_EXTENSIONS:
         raise Exception("Invalid image path: {}".format(X_img_path))
@@ -315,8 +330,8 @@ p    :param model_path: (optional) path to a pickled knn classifier. if not spec
     X_face_locations = [(0,X_img.shape[0], X_img.shape[1],0)]
 
     # If no faces are found in the image, return an empty result.
-    if len(X_face_locations) == 0:
-        return []
+    # if len(X_face_locations) == 0:
+    #    return []
 
     # Find encodings for faces in the test iamge
     faces_encodings = face_recognition.face_encodings(X_img, known_face_locations=X_face_locations)
@@ -327,11 +342,12 @@ p    :param model_path: (optional) path to a pickled knn classifier. if not spec
     #bp()
     # closest_distances = [ dist  for dist in closest_neighbors[0][0]]
 
-    test1 = knn_clf.predict_proba(faces_encodings)
-    test1 = test1[0]
-    top_5_indices = test1.argsort()[-5:].tolist()
-    top_5_prob = list(map(lambda idx: test1[idx], top_5_indices))
-    top_5_label = list(map(lambda idx: y[idx], top_5_indices))
+    # bp()
+    closest_probs_for_faces = knn_clf.predict_proba(faces_encodings)  # plural because may have multiple faces in faces_encodings
+    closest_probs_for_one_face = closest_probs_for_faces[0]                         # we expect only one face per call
+    top_5_indices = closest_probs_for_one_face.argsort()[-5:].tolist()
+    top_5_prob = list(map(lambda idx: closest_probs_for_one_face[idx], top_5_indices))
+    top_5_label = list(map(lambda idx: knn_clf.classes_[idx], top_5_indices))
 
     print("before curation: top 5 labels {}".format(top_5_label))
 
