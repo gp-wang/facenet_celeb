@@ -41,7 +41,21 @@ import multiprocessing
 from pdb import set_trace as bp
 import functools
 import json
+import random
 
+import pika
+import uuid
+
+
+BASE_TRAIN_SET_PATH = '/home/gaopeng/workspace/ms1m-aligned-full/filtered_by_imdb_top_4000_celeb/train'
+
+def get_random_img_under_msid(msid):
+    full_dirname = os.path.join(BASE_TRAIN_SET_PATH, msid)
+    imgs = [fname  for fname in os.listdir(full_dirname) if fname.endswith(".jpg")]
+    
+    #return random.choices(imgs, k=5)
+    return random.choice(imgs)
+    
 def ms1m_name_list_reader(fname):
     assert os.path.isfile(fname), "{} doesn't exist".format(fname)
 
@@ -222,11 +236,8 @@ def classifier_init(args):
 
 
             #N = 8 * 3
-            N = 5
+            N = 8 * 3
             top_N_class_label_indices = np.argsort(-predictions, axis=1)[:, :N]  # 8 * 3 per subset
-
-            
-            
             # b_top3_per_row = b[
             #             np.repeat(
             #                             np.expand_dims(
@@ -251,6 +262,7 @@ def classifier_init(args):
                 , top_N_class_label_indices
             ]
             #bp()
+            # msid's
             top_N_class_label_names = np.chararray((top_N_class_label_indices.shape[0], top_N_class_label_indices.shape[1]))
             for i in range(top_N_class_label_names.shape[0]):
                 for j in range(top_N_class_label_names.shape[1]):
@@ -259,7 +271,30 @@ def classifier_init(args):
                     except:
                         print("i: {}, j:{}, top_N_class_label_indices[i][j]: {}".format(i,j, top_N_class_label_indices[i][j]))
                         raise
-            
+            top_N_class_face_dist = np.zeros((top_N_class_label_indices.shape[0], top_N_class_label_indices.shape[1]))
+            for i in range(top_N_class_face_dist.shape[0]):
+                msid_to_img_fpath_dict = {}
+                #bp()
+                for j in range(top_N_class_face_dist.shape[1]):
+                    msid = combined_class_names[top_N_class_label_indices[i][j]]
+                    img_fname = get_random_img_under_msid(msid)  # TODO
+                    msid_to_img_fpath_dict[msid] = os.path.join(msid, img_fname)
+                    
+                test_img_fname = os.path.basename(paths[i])
+                test_img_dirname_person_folder = os.path.basename(os.path.dirname(paths[i]))
+                test_img_dirname_tmp_folder = os.path.basename(os.path.dirname(os.path.dirname(paths[i])))
+                # second_compare_rpc
+                
+                msid_to_face_dist_dict = pickle.loads(
+                    second_compare_rpc.call(
+                        pickle.dumps((msid_to_img_fpath_dict, os.path.join(test_img_dirname_tmp_folder, test_img_dirname_person_folder, test_img_fname)))))
+
+                
+                for j in range(top_N_class_face_dist.shape[1]):
+                    msid = combined_class_names[top_N_class_label_indices[i][j]]
+                    top_N_class_face_dist[i][j] = msid_to_face_dist_dict[msid]
+                
+                    
             #bp()
             best_class_indices = np.argmax(predictions, axis=1)
             best_class_names = np.array([combined_class_names[idx] for idx in best_class_indices])
@@ -302,6 +337,7 @@ def classifier_init(args):
                             {
                                 'name': show_human_name_or_raw_class_name(combined_class_names[top_N_class_label_indices[i][j]]).split('@')[0].strip('"'),
                                 'prob': top_N_class_label_prob[i][j],
+                                'dist': top_N_class_face_dist[i][j],
                             } for j in range(N)
                         ]
                     }
@@ -412,9 +448,7 @@ def parse_arguments():
 
 
 
-# gw: rpc server
-import pika
-
+# gw: first compare rpc server
 connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
 
 channel = connection.channel()
@@ -447,6 +481,49 @@ def on_request(ch, method, props, body):
                                                          props.correlation_id),
                      body=str(response))
     ch.basic_ack(delivery_tag = method.delivery_tag)
+
+
+# seconcd compare rpc client
+class SecondCompareRpcClient(object):
+    def __init__(self):
+
+
+        credentials = pika.PlainCredentials('starface', 'f4c3st4r')
+        parameters = pika.ConnectionParameters('192.168.0.104',
+                                               5672,
+                                               '/',
+                                               credentials)
+        
+        self.connection = pika.BlockingConnection(parameters)
+
+        self.channel = self.connection.channel()
+
+        result = self.channel.queue_declare(exclusive=True)
+        self.callback_queue = result.method.queue
+
+        self.channel.basic_consume(self.on_response, no_ack=True,
+                                   queue=self.callback_queue)
+
+    def on_response(self, ch, method, props, body):
+        if self.corr_id == props.correlation_id:
+            self.response = body
+
+    def call(self, body):
+        self.response = None
+        self.corr_id = str(uuid.uuid4())
+        self.channel.basic_publish(exchange='',
+                                   routing_key='second_comparison_queue_7',
+                                   properties=pika.BasicProperties(
+                                         reply_to = self.callback_queue,
+                                         correlation_id = self.corr_id,
+                                         ),
+                                   body=body)
+        while self.response is None:
+            self.connection.process_data_events()
+        return self.response
+
+second_compare_rpc = SecondCompareRpcClient()
+
 
 
 if __name__ == '__main__':

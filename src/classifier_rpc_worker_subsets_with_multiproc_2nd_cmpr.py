@@ -224,9 +224,6 @@ def classifier_init(args):
             #N = 8 * 3
             N = 5
             top_N_class_label_indices = np.argsort(-predictions, axis=1)[:, :N]  # 8 * 3 per subset
-
-            
-            
             # b_top3_per_row = b[
             #             np.repeat(
             #                             np.expand_dims(
