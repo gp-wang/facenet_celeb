@@ -255,6 +255,7 @@ def classifier_init():
 
                     bio, avartar, birthYear, deathYear, professions, knownForTitles = None, None, None, None, None, None
                     primaryName = "unknown"
+                    tb = None
                     try:
                         imdb_celeb, imdb_msid = imdb_celeb_query.filter(ImdbMsid.msid == msid).filter(ImdbMsid.nconst == ImdbCelebrity.nconst).all()[0]
 
@@ -263,7 +264,7 @@ def classifier_init():
                         avartar = imdb_celeb.avartar_blob
                         birthYear = imdb_celeb.birthYear
                         deathYear = imdb_celeb.deathYear
-                        professions = imdb_celeb.professions
+                        professions = imdb_celeb.primaryProfession
                         knownForTitles = imdb_celeb.knownForTitles
                         
                     except IndexError as ie:
