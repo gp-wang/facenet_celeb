@@ -71,6 +71,7 @@ from datetime import datetime
 from model import ImdbCelebrity, ImdbMsid
 # import model
 
+import base64
 
 # Constants -----------------------------------------------
 
@@ -261,9 +262,19 @@ def classifier_init():
 
                         primaryName = imdb_celeb.primaryName
                         bio = imdb_celeb.bio
-                        avartar = imdb_celeb.avartar_blob
-                        birthYear = imdb_celeb.birthYear
-                        deathYear = imdb_celeb.deathYear
+
+                        # some trick for serializing image, use base64
+                        img_encoding = imdb_celeb.avartar_blob
+                        img_b64_encoding = base64.b64encode(img_encoding)
+                        img_b64_str = str(img_b64_encoding, encoding='utf-8')
+                        avartar = img_b64_str
+
+                        # datetime is not serializable, use string
+                        if imdb_celeb.birthYear:
+                            birthYear = str(imdb_celeb.birthYear.year)
+                        if imdb_celeb.deathYear:
+                            deathYear = str(imdb_celeb.deathYear.year)
+                            
                         professions = imdb_celeb.primaryProfession
                         knownForTitles = imdb_celeb.knownForTitles
                         
