@@ -49,6 +49,41 @@ import uuid
 import numpy as np
 from collections import namedtuple
 
+
+from sqlalchemy import and_, or_
+from sqlalchemy import Column
+from sqlalchemy import create_engine
+from sqlalchemy import DateTime
+from sqlalchemy import Float
+from sqlalchemy import ForeignKey
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import VARCHAR
+from sqlalchemy import CHAR
+from sqlalchemy import BINARY
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Session
+
+import traceback
+from datetime import datetime
+# my db model for imdb celebrity, original on c5 imdb_celeb_parser
+from model import ImdbCelebrity, ImdbMsid
+# import model
+
+
+# Constants -----------------------------------------------
+
+
+DB_USER = 'imdb_celeb_parser'
+DB_PASSWORD = 'imdb_celeb_parser'
+DB_HOST = '192.168.0.105'
+DB_PORT = '3306'
+DB_NAME = 'imdb_celeb_parser'
+
+
+
+
 Prediction = namedtuple('Prediction', ['msid', 'prob'])
 
 def curate_top_predictions(predictions):
@@ -172,6 +207,19 @@ def classifier_init():
 
 
 
+    #  DB init
+    db_engine = create_engine("mysql+mysqldb://{user}:{pwd}@{host}:{port}/{dbname}".format(
+        user=DB_USER,
+        pwd=DB_PASSWORD,
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME
+    ))
+    db_session = Session(db_engine)
+    imdb_celeb_query = db_session.query(ImdbCelebrity, ImdbMsid)
+    # TODO: Join
+
+
     
 
 
@@ -203,15 +251,53 @@ def classifier_init():
                 if predictions:
 
                     top_pred = predictions[0]
-                    predicted_human_name = show_human_name_or_raw_class_name(top_pred.msid)
+                    msid = top_pred.msid
+
+                    bio, avartar, birthYear, deathYear, professions, knownForTitles = None, None, None, None, None, None
+                    primaryName = "unknown"
+                    try:
+                        imdb_celeb, imdb_msid = imdb_celeb_query.filter(ImdbMsid.msid == msid).filter(ImdbMsid.nconst == ImdbCelebrity.nconst).all()[0]
+
+                        primaryName = imdb_celeb.primaryName
+                        bio = imdb_celeb.bio
+                        avartar = imdb_celeb.avartar_blob
+                        birthYear = imdb_celeb.birthYear
+                        deathYear = imdb_celeb.deathYear
+                        professions = imdb_celeb.professions
+                        knownForTitles = imdb_celeb.knownForTitles
+                        
+                    except IndexError as ie:
+                        print("db lookup gives empty rows, err: %r " % ie)
+                        tb = traceback.format_exc()
+                    except Exception as e:
+                        print("db lookup unkown exception: %r " % e)
+                        tb = traceback.format_exc()
+                    else:
+                        tb = ""
+
+                    finally:
+                        if tb:
+                            print(tb)
+
+                    # gw: deprecated, use imdb_celeb instead
+                    # predicted_human_name = show_human_name_or_raw_class_name(top_pred.msid)
 
                     single_prediction_dict = {
                         'screenId' : label,
                         'best': {
                             # img_paths[0]: assume there is only one image for each person folder
-                            'name': predicted_human_name,
+                            # 'name': predicted_human_name,
+                            'name': primaryName,
                             # put as 0.0 dummy value since we are using knn (prob are for earlier svc model)
-                            'prob': top_pred.prob
+                            'prob': top_pred.prob,
+
+                            # gw: new field since 02022019
+                            'bio': bio,
+                            'avartar' : avartar,
+                            'birthYear': birthYear ,
+                            'deathYear': deathYear ,
+                            'professions': professions ,
+                            'knownForTitles': knownForTitles ,
                         },
                         'topN': [
                             {
