@@ -145,7 +145,7 @@ def classifier_init():
         # bp()
         return predict(img_fpath, knn_clf=clf, distance_threshold=0.6, y=y)
 
-    msid_to_name_dict = ms1m_name_list_reader("/home/gaopeng/workspace/ms1m-aligned-full/Top1M_MidList.Name.tsv")
+    msid_to_name_dict = ms1m_name_list_reader("/home/gaopeng/workspace/ms1m-aligned-full/Top1M_MidList.Name.gw.tsv")
 
     def show_human_name_or_raw_class_name(msid):
         human_name = None
