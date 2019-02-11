@@ -141,6 +141,11 @@ def get_dataset(path, has_class_directories=True):
         facedir = os.path.join(path_exp, class_name)
         image_paths = get_image_paths(facedir)
         dataset.append((class_name, image_paths))
+
+    # gw: for now assume all classname are numerical
+    # sort them based on id
+    dataset.sort(key=lambda d: int(d[0]))
+    
     return dataset
 
 # gw: copied and modifed from facenet.py
@@ -215,7 +220,7 @@ def classifier_init():
         host=DB_HOST,
         port=DB_PORT,
         dbname=DB_NAME
-    ))
+    ), connect_args={'connect_timeout': 31536000})
     db_session = Session(db_engine)
     imdb_celeb_query = db_session.query(ImdbCelebrity, ImdbMsid)
     # TODO: Join
@@ -236,7 +241,9 @@ def classifier_init():
 
         #bp()
         dataset = get_dataset(dirname)  # tuple of (class_name, img_paths)
-        result = {}
+        # gw: 02032019: changed to array
+        # result = {}
+        result = []
         
         for (label_name, img_paths) in dataset:
             label = int(label_name)
@@ -330,8 +337,10 @@ def classifier_init():
             finally:
                 if tb:
                     print(tb)
-                    
-            result[label] = single_prediction_dict
+
+            # gw: 02032019: changed to array
+            # result[label] = single_prediction_dict
+            result.append(single_prediction_dict)
         return json.dumps(result)
 
 
