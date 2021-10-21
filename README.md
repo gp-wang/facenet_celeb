@@ -1,3 +1,13 @@
+# facenet_celeb
+
+This is the backend facial recognition server for the application Celebscope, which is an app of celebrities facial recognition.
+It is built with the FaceNet framework (see below). 
+The secondary development code are under src/ (these starting with classifier*)
+There are different classifiers: e.g. those dividing the monolithic model into 8 submodel and doing each as a subprocess, or remotely doing the classifying on another server using rpc.
+
+
+(split line for original framework)
+---------------------------------
 # Face Recognition using Tensorflow [![Build Status][travis-image]][travis]
 
 [travis-image]: http://travis-ci.org/davidsandberg/facenet.svg?branch=master
